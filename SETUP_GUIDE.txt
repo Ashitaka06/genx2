@@ -102,3 +102,7 @@ Dans Dockerfile, changer la ligne en:
 FROM --platform="linux/arm64" node:22-alpine3.20 AS build
 ou
 FROM --platform="linux/amd64" node:22-alpine3.20 AS build
+
+Nouvelle conversation -> Nouveau Chat dans fr-fr locale
+
+Télécharger configuration + Modèles + Base de Données
