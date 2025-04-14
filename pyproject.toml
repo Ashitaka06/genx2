@@ -2,7 +2,7 @@
 name = "open-webui"
 description = "genX"
 authors = [
-    { name = "Timothy Jaeryang Baek", email = "tim@openwebui.com" }
+    { name = "DataX LLM", email = "tim@openwebui.com" }
 ]
 license = { file = "LICENSE" }
 dependencies = [

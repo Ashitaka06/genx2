@@ -208,7 +208,7 @@ echo -e "   ${GREEN}${BOLD}GPU Driver:${NC} ${OLLAMA_GPU_DRIVER:-Not Enabled}"
 echo -e "   ${GREEN}${BOLD}GPU Count:${NC} ${OLLAMA_GPU_COUNT:-Not Enabled}"
 echo -e "   ${GREEN}${BOLD}WebAPI Port:${NC} ${OLLAMA_WEBAPI_PORT:-Not Enabled}"
 echo -e "   ${GREEN}${BOLD}Data Folder:${NC} ${data_dir:-Using ollama volume}"
-echo -e "   ${GREEN}${BOLD}WebUI Port:${NC} $webui_port"
+echo -e "   ${GREEN}${BOLD}genX Port:${NC} $webui_port"
 echo -e "   ${GREEN}${BOLD}Playwright:${NC} ${enable_playwright:-false}"
 echo
 

@@ -1,6 +1,6 @@
 {
   "name": "genX",
-  "short_name": "WebUI",
+  "short_name": "genX",
   "icons": [
     {
       "src": "/static/web-app-manifest-192x192.png",

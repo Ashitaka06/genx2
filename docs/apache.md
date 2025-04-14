@@ -202,4 +202,4 @@ Let's make this UI much more user friendly for everyone!
 
 Thanks for making open-webui your UI Choice for AI!
 
-This doc is made by **Bob Reyes**, your **Open-WebUI** fan from the Philippines.
+This doc is made by **Bob Reyes**, your **Open-genX** fan from the Philippines.

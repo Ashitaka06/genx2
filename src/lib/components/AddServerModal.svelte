@@ -239,7 +239,7 @@
 						</div>
 
 						<div class="text-xs text-gray-500 mt-1">
-							{$i18n.t(`WebUI will make requests to "{{url}}"`, {
+							{$i18n.t(`genX will make requests to "{{url}}"`, {
 								url: `${url}/${path}`
 							})}
 						</div>

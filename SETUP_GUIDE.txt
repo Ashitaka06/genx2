@@ -106,3 +106,15 @@ FROM --platform="linux/amd64" node:22-alpine3.20 AS build
 Nouvelle conversation -> Nouveau Chat dans fr-fr locale
 
 Télécharger configuration + Modèles + Base de Données
+
+Control + F OpenWeb UI -> genX
+
+Remove tags + License in General.svelte
+
+Control + F OpenWebUI -> genX dans src/lib/ 
+
+Control + F Timothy J. Baek -> DataX LLM
+
+Remove links + License Text in About.svelte
+
+Control + F WebUI -> genX dans src
