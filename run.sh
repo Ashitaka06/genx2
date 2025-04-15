@@ -1,7 +1,7 @@
 #!/bin/bash
 
-image_name="genx"
-container_name="genx"
+image_name="open-webui"
+container_name="open-webui"
 host_port=3000
 container_port=8080
 
