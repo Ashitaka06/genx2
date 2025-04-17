@@ -31,7 +31,7 @@
 		console.log('share', _chat);
 
 		toast.success($i18n.t('Redirecting you to genX Community'));
-		const url = 'https://openwebui.com';
+		const url = 'https://genx.datax.iliad.fr';
 		// const url = 'http://localhost:5173';
 
 		const tab = await window.open(`${url}/chats/upload`, '_blank');

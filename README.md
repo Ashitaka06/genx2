@@ -38,7 +38,7 @@ For more information, be sure to check out our [genX Documentation](https://docs
 
 - 🎤📹 **Hands-Free Voice/Video Call**: Experience seamless communication with integrated hands-free voice and video call features, allowing for a more dynamic and interactive chat environment.
 
-- 🛠️ **Model Builder**: Easily create Ollama models via the Web UI. Create and add custom characters/agents, customize chat elements, and import models effortlessly through [genX Community](https://openwebui.com/) integration.
+- 🛠️ **Model Builder**: Easily create Ollama models via the Web UI. Create and add custom characters/agents, customize chat elements, and import models effortlessly through [genX Community](https://genx.datax.iliad.fr/) integration.
 
 - 🐍 **Native Python Function Calling Tool**: Enhance your LLMs with built-in code editor support in the tools workspace. Bring Your Own Function (BYOF) by simply adding your pure Python functions, enabling seamless integration with LLMs.
 
@@ -64,7 +64,7 @@ Want to learn more about genX's features? Check out our [genX documentation](htt
 
 ## 🔗 Also Check Out genX Community!
 
-Don't forget to explore our sibling project, [genX Community](https://openwebui.com/), where you can discover, download, and explore customized Modelfiles. genX Community offers a wide range of exciting possibilities for enhancing your chat interactions with genX! 🚀
+Don't forget to explore our sibling project, [genX Community](https://genx.datax.iliad.fr/), where you can discover, download, and explore customized Modelfiles. genX Community offers a wide range of exciting possibilities for enhancing your chat interactions with genX! 🚀
 
 ## How to Install 🚀
 
@@ -225,4 +225,4 @@ If you have any questions, suggestions, or need assistance, please open an issue
 
 ---
 
-Created by [DataX LLM](https://github.com/tjbck) - Let's make genX even more amazing together! 💪
+Created by [DataX LLM](https://datax.iliad.fr) - Let's make genX even more amazing together! 💪

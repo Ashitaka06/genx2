@@ -216,7 +216,7 @@ async def speech(request: Request, user=Depends(get_verified_user)):
                     "Authorization": f"Bearer {request.app.state.config.OPENAI_API_KEYS[idx]}",
                     **(
                         {
-                            "HTTP-Referer": "https://openwebui.com/",
+                            "HTTP-Referer": "https://genx.datax.iliad.fr/",
                             "X-Title": "genX",
                         }
                         if "openrouter.ai" in url
@@ -706,7 +706,7 @@ async def generate_chat_completion(
                 "Content-Type": "application/json",
                 **(
                     {
-                        "HTTP-Referer": "https://openwebui.com/",
+                        "HTTP-Referer": "https://genx.datax.iliad.fr/",
                         "X-Title": "genX",
                     }
                     if "openrouter.ai" in url

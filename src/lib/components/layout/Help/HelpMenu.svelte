@@ -38,7 +38,7 @@
 				class="flex gap-2 items-center px-3 py-2 text-sm  cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-md"
 				id="chat-share-button"
 				on:click={() => {
-					window.open('https://docs.openwebui.com', '_blank');
+					window.open('https://iliad-datax.notion.site/GenX-e28c8f263a2b4876b3606c20051ea992', '_blank');
 				}}
 			>
 				<QuestionMarkCircle className="size-5" />
