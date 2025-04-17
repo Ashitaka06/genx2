@@ -1,218 +1,290 @@
-#!/usr/bin/env python3
+import logging
 import os
 import shutil
 import subprocess
 import re
+import json
+from pathlib import Path
 
-def run_command(cmd, cwd=None):
-    """Exécute une commande shell en mode blocking."""
-    print(f"Exécution de: {cmd} (dans {cwd if cwd else os.getcwd()})")
-    subprocess.run(cmd, shell=True, check=True, cwd=cwd)
+# Configuration du logger
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+logger = logging.getLogger(__name__)
 
-def update_file(filepath, replacements=[], regex_replacements=[]):
+
+def run_command(cmd: str, cwd: Path = None):
+    """Exécute une commande shell en mode bloquant et journalise chaque étape."""
+    cwd_display = cwd or Path.cwd()
+    logger.info(f"Exécution de la commande: {cmd} (dans {cwd_display})")
+    cwd_arg = str(cwd) if cwd else None
+    try:
+        subprocess.run(cmd, shell=True, check=True, cwd=cwd_arg)
+        logger.info(f"Commande terminée avec succès: {cmd}")
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Échec de la commande `{cmd}`: {e}")
+        raise
+
+
+def update_file(filepath: Path, replacements: list[tuple[str, str]]):
     """
-    Lit un fichier texte, applique une série de remplacements simples (liste de tuples (old, new))
-    et de remplacements par expressions régulières (liste de tuples (pattern, new)).
-    Si le contenu a changé, le fichier est réécrit.
+    Lit un fichier texte, applique des remplacements de mots entiers.
+    Si le contenu change, réécrit le fichier et journalise l'opération.
     """
     try:
-        with open(filepath, "r", encoding="utf-8") as f:
-            content = f.read()
+        content = filepath.read_text(encoding='utf-8')
     except Exception as e:
-        print(f"Impossible de lire {filepath} : {e}")
+        logger.debug(f"Impossible de lire {filepath}: {e}")
         return
 
     original = content
     for old, new in replacements:
-        content = content.replace(old, new)
-    for pattern, new in regex_replacements:
+        pattern = rf"\b{re.escape(old)}\b"
         content = re.sub(pattern, new, content)
-    if content != original:
-        with open(filepath, "w", encoding="utf-8") as f:
-            f.write(content)
-        print(f"Mise à jour du fichier: {filepath}")
 
-def update_file_remove_block(filepath, block):
+    if content != original:
+        try:
+            filepath.write_text(content, encoding='utf-8')
+            logger.info(f"Fichier mis à jour: {filepath}")
+        except Exception as e:
+            logger.error(f"Erreur lors de l'écriture de {filepath}: {e}")
+
+
+def update_translation_file(filepath: Path, mapping: dict[str, str]):
     """
-    Supprime une occurrence exacte d'un bloc de texte dans le fichier.
+    Met à jour un fichier translation.json en remplaçant les valeurs des clés spécifiées.
     """
     try:
-        with open(filepath, "r", encoding="utf-8") as f:
-            content = f.read()
+        content = filepath.read_text(encoding='utf-8')
+        data = json.loads(content)
     except Exception as e:
-        print(f"Impossible de lire {filepath} : {e}")
+        logger.debug(f"Impossible de lire ou parser JSON {filepath}: {e}")
         return
 
-    if block in content:
-        new_content = content.replace(block, "")
-        with open(filepath, "w", encoding="utf-8") as f:
-            f.write(new_content)
-        print(f"Bloc supprimé dans le fichier: {filepath}")
+    original = dict(data)
+    for key, new_val in mapping.items():
+        if key in data and data[key] != new_val:
+            data[key] = new_val
 
-def recursive_update(directory, replacements=[], regex_replacements=[]):
-    """
-    Parcourt récursivement un dossier et effectue des remplacements dans tous les fichiers texte.
-    En cas d’erreur (fichier binaire ou non lisible en utf-8) le fichier est ignoré.
-    """
-    for root, dirs, files in os.walk(directory):
-        for file in files:
-            path = os.path.join(root, file)
-            try:
-                with open(path, "r", encoding="utf-8") as f:
-                    content = f.read()
-            except Exception as e:
-                continue
-            original = content
-            for old, new in replacements:
-                content = content.replace(old, new)
-            for pattern, new in regex_replacements:
-                content = re.sub(pattern, new, content)
-            if content != original:
-                try:
-                    with open(path, "w", encoding="utf-8") as f:
-                        f.write(content)
-                    print(f"Fichier mis à jour: {path}")
-                except Exception as e:
-                    print(f"Erreur lors de l'écriture du fichier {path} : {e}")
+    if data != original:
+        try:
+            filepath.write_text(
+                json.dumps(data, ensure_ascii=False, indent=4), encoding='utf-8'
+            )
+            logger.info(f"Fichier de traduction mis à jour: {filepath}")
+        except Exception as e:
+            logger.error(f"Erreur écriture JSON {filepath}: {e}")
 
-def remove_block_in_files(directory, block_text):
+
+def remove_block_in_file(filepath: Path, block_text: str):
     """
-    Parcourt un dossier et supprime d'éventuelles occurrences d’un bloc donné dans chaque fichier texte.
+    Supprime une occurrence exacte d'un bloc de texte dans un fichier.
     """
-    for root, dirs, files in os.walk(directory):
-        for file in files:
-            path = os.path.join(root, file)
+    try:
+        content = filepath.read_text(encoding='utf-8')
+    except Exception as e:
+        logger.debug(f"Impossible de lire {filepath}: {e}")
+        return
+    if block_text in content:
+        new_content = content.replace(block_text, '')
+        try:
+            filepath.write_text(new_content, encoding='utf-8')
+            logger.info(f"Bloc supprimé dans {filepath}")
+        except Exception as e:
+            logger.error(f"Erreur lors de la suppression du bloc dans {filepath}: {e}")
+    else:
+        logger.debug(f"Bloc non trouvé dans {filepath}")
+
+
+def remove_regex_in_file(filepath: Path, regex_pattern: str):
+    """
+    Supprime les occurrences correspondant à une regex (DOTALL) dans un fichier.
+    """
+    try:
+        content = filepath.read_text(encoding='utf-8')
+    except Exception as e:
+        logger.debug(f"Impossible de lire {filepath}: {e}")
+        return
+    new_content = re.sub(regex_pattern, '', content, flags=re.DOTALL)
+    if new_content != content:
+        try:
+            filepath.write_text(new_content, encoding='utf-8')
+            logger.info(f"Regex supprimé dans {filepath}")
+        except Exception as e:
+            logger.error(f"Erreur suppression regex dans {filepath}: {e}")
+
+
+def remove_block_in_files(directory: Path, block_text: str):
+    """
+    Parcourt un dossier et supprime un bloc fixe dans chaque fichier.
+    """
+    for path in directory.rglob('*'):
+        if path.is_file():
+            remove_block_in_file(path, block_text)
+
+
+def recursive_replace(directory: Path, replacements: list[tuple[str, str]]):
+    """
+    Parcourt récursivement un dossier et effectue des remplacements sur mots entiers.
+    """
+    for path in directory.rglob('*'):
+        if not path.is_file():
+            continue
+        try:
+            content = path.read_text(encoding='utf-8')
+        except Exception:
+            continue
+        new_content = content
+        for old, new in replacements:
+            pattern = rf"\b{re.escape(old)}\b"
+            new_content = re.sub(pattern, new, new_content)
+        if new_content != content:
             try:
-                with open(path, "r", encoding="utf-8") as f:
-                    content = f.read()
+                path.write_text(new_content, encoding='utf-8')
+                logger.info(f"Remplacements globaux appliqués à {path}")
             except Exception as e:
-                continue
-            if block_text in content:
-                new_content = content.replace(block_text, "")
-                with open(path, "w", encoding="utf-8") as f:
-                    f.write(new_content)
-                print(f"Bloc supprimé dans: {path}")
+                logger.error(f"Erreur écriture {path}: {e}")
+
+
+def copy_directory(src: Path, dst: Path, overwrite: bool = False):
+    """Copie un dossier en remplaçant l'existant si nécessaire."""
+    if dst.exists() and overwrite:
+        shutil.rmtree(dst)
+        logger.info(f"Suppression du dossier existant: {dst}")
+    shutil.copytree(src, dst)
+    logger.info(f"Dossier copié: {src} -> {dst}")
+
+
+def copy_file(src: Path, dst: Path):
+    """Copie un fichier si la source existe."""
+    if src.exists():
+        shutil.copy2(src, dst)
+        logger.info(f"Fichier copié: {src} -> {dst}")
+    else:
+        logger.debug(f"Fichier introuvable, non copié: {src}")
+
+def replace_regex_in_file(filepath: Path, pattern: str, repl: str):
+    try:
+        text = filepath.read_text(encoding='utf-8')
+    except (UnicodeDecodeError, Exception) as e:
+        logger.debug(f"Impossible de lire {filepath} en UTF-8, on l'ignore : {e}")
+        return
+
+    new = re.sub(pattern, repl, text, flags=re.MULTILINE)
+    if new != text:
+        try:
+            filepath.write_text(new, encoding='utf-8')
+            logger.info(f"Applied regex replace in {filepath}")
+        except Exception as e:
+            logger.error(f"Impossible d’écrire {filepath} après regex replace : {e}")
+
+def recursive_regex_replace(directory: Path, pattern: str, repl: str):
+    for path in directory.rglob('*'):
+        if not path.is_file():
+            continue
+        replace_regex_in_file(path, pattern, repl)
 
 def main():
-    # 1. Se placer dans /root et cloner le dépôt s'il n'existe pas déjà
-    root_dir = "/root"
+    root_dir = Path('/root')
+    repo_dir = root_dir / 'open-webui'
+    docker_container = 'open-webui'
+
+    # Étape 1: Cloner le dépôt
+    logger.info('Étape 1: Clonage du dépôt')
     os.chdir(root_dir)
-    if not os.path.exists("open-webui"):
-        run_command("git clone https://github.com/open-webui/open-webui")
-    
-    open_webui_dir = os.path.join(root_dir, "open-webui")
-    os.chdir(open_webui_dir)
+    if not repo_dir.exists():
+        run_command('git clone https://github.com/open-webui/open-webui')
 
-    # 2. Modifier le Dockerfile
-    dockerfile_path = os.path.join(open_webui_dir, "Dockerfile")
+    # Étape 2: Export de la base de données
+    logger.info('Étape 2: Export de la base de données depuis Docker')
+    os.chdir(repo_dir)
+    run_command(f'docker cp {docker_container}:/app/backend/data/webui.db {repo_dir}/webui.db')
+
+    # Étape 3: Mise à jour du Dockerfile
+    logger.info('Étape 3: Mise à jour du Dockerfile')
+    dockerfile = repo_dir / 'Dockerfile'
     update_file(
-        dockerfile_path,
-        replacements=[
-            ('FROM --platform=$BUILDPLATFORM node:22-alpine3.20 AS build',
-             'FROM --platform="linux/arm64" node:22-alpine3.20 AS build')
-        ]
+        dockerfile,
+        [('FROM --platform=$BUILDPLATFORM node:22-alpine3.20 AS build',
+          'FROM --platform="linux/arm64" node:22-alpine3.20 AS build')]
     )
 
-    # 3. Modifier translation.json pour fr-CA
-    frca_path = os.path.join(open_webui_dir, "src", "lib", "i18n", "locales", "fr-CA", "translation.json")
-    update_file(
-        frca_path,
-        replacements=[
-            ('"New Chat": "Nouvelle conversation",', '"New Chat": "Nouveau Chat",')
-        ]
+    # Étape 4: Traductions FR
+    logger.info('Étape 4: Mise à jour des fichiers de traduction pour le français')
+    translation_mapping = {
+        "New Chat": "Nouveau Chat",
+        "Upload files": "Importer un fichier",
+        "Upload Files": "Importer un fichier",
+        "Capture": "Capture de l'écran"
+    }
+    for loc in ['fr-CA', 'fr-FR']:
+        path = repo_dir / 'src' / 'lib' / 'i18n' / 'locales' / loc / 'translation.json'
+        update_translation_file(path, translation_mapping)
+
+    # Étape 4b: Suppression du bloc ollamaVersion + license dans About.svelte
+    logger.info('Étape 4b: Suppression du bloc ollamaVersion + license dans About.svelte')
+    about_file = repo_dir / 'src' / 'lib' / 'components' / 'chat' / 'Settings' / 'About.svelte'
+    remove_regex_in_file(
+        about_file,
+        r"\{#if ollamaVersion\}[\s\S]*\{/if\}"
     )
 
-    # 4. Modifier translation.json pour fr-FR
-    frfr_path = os.path.join(open_webui_dir, "src", "lib", "i18n", "locales", "fr-FR", "translation.json")
-    update_file(
-        frfr_path,
-        replacements=[
-            ('"New Chat": "Nouvelle conversation",', '"New Chat": "Nouveau Chat",')
-        ]
+    # Étape 4c: Suppression du bloc des badges Help (Discord, Twitter, GitHub) dans General.svelte
+    logger.info('Étape 4c: Suppression du bloc des badges Help dans General.svelte')
+    general_file = repo_dir / 'src' / 'lib' / 'components' / 'admin' / 'Settings' / 'General.svelte'
+    remove_regex_in_file(
+        general_file,
+        r'<div class="mt-1">\s*<div class="flex space-x-1">[\s\S]*?<\/div>\s*<\/div>'
     )
 
-    # 5. Modifier run.sh : image_name et container_name
-    run_sh_path = os.path.join(open_webui_dir, "run.sh")
-    update_file(
-        run_sh_path,
-        replacements=[
-            ('image_name="open-webui"', 'image_name="genx"'),
-            ('container_name="open-webui"', 'container_name="genx"')
-        ]
+    # Étape 4d: Suppression du bloc License dans General.svelte
+    logger.info('Étape 4d: Suppression du bloc License dans General.svelte')
+    remove_regex_in_file(
+        general_file,
+        r'<div class="mb-2\.5">\s*<div class="flex w-full justify-between items-center">[\s\S]*?\{\$i18n\.t\(\'License\'\)\}[\s\S]*?<\/div>\s*<\/div>'
     )
 
-    # 6. Remplacements globaux dans tous les fichiers de /root/open-webui
+    # Étape 5: Remplacements globaux
+    logger.info('Étape 5: Remplacements globaux dans tout le projet')
     global_replacements = [
-        ("Open WebUI", "genX"),
-        ("WebUI", "genX"),
-        ("tim@openwebui.com", "datax@iliad.fr"),
-        ("hello@openwebui.com", "datax@iliad.fr"),
-        ("sales@openwebui.com", "datax@iliad.fr"),
-        ("@openwebui.com", "@iliad.fr"),
-        ("https://github.com/tjbck", "https://datax.iliad.fr"),
-        ("Timothy J. Baek", "DataX LLM"),
-        ("Timothy Jaeryang Baek", "DataX LLM"),
-        ("https://docs.openwebui.com/features/plugin/functions/filter", "https://iliad-datax.notion.site/GenX-e28c8f263a2b4876b3606c20051ea992"),
-        ("https://docs.openwebui.com/", "https://iliad-datax.notion.site/GenX-e28c8f263a2b4876b3606c20051ea992"),
-        ("https://docs.openwebui.com", "https://iliad-datax.notion.site/GenX-e28c8f263a2b4876b3606c20051ea992"),
-        ("https://docs.openwebui.com/features/plugin/", "https://iliad-datax.notion.site/GenX-e28c8f263a2b4876b3606c20051ea992")
+        ('Open WebUI', 'genX'),
+        ('WebUI',      'genX'),
+        ('https://openwebui.com',        'https://genx.datax.iliad.fr'),
+        ('https://github.com/tjbck',     'https://datax.iliad.fr'),
+        ('Timothy J. Baek',              'DataX LLM'),
+        ('Timothy Jaeryang Baek',        'DataX LLM'),
     ]
-    global_regex_replacements = [
-        # Cas général pour les autres URLs commençant par "https://github.com/open-webui/"
-        (r'https://github\.com/open-webui/[^"]*', "https://iliad-datax.notion.site/GenX-e28c8f263a2b4876b3606c20051ea992"),
-        # Traitement des URLs commençant par "https://openwebui.com/"
-        (r'https://openwebui\.com/[^"]*', "https://datax.iliad.fr")
+    recursive_replace(repo_dir, global_replacements)
+
+    # Étape 5b: Remplacement **exact** de la racine docs.openwebui.com
+    logger.info('Étape 5b: Remplacement exact du domaine docs.openwebui.com')
+    # negative lookahead (?!/) : n’affecte pas les URLs qui continuent par un slash
+    docs_pattern = r'https://docs\.openwebui\.com(?!/)'
+    docs_repl    = 'https://iliad-datax.notion.site/GenX-e28c8f263a2b4876b3606c20051ea992'
+    recursive_regex_replace(repo_dir, docs_pattern, docs_repl)
+
+    # Étape 6: Copie des assets DataX
+    logger.info('Étape 6: Copie des assets DataX')
+    copy_directory(root_dir / 'genx2' / 'static' / 'assets' / 'datax',
+                   repo_dir / 'static' / 'assets' / 'datax', overwrite=True)
+
+    # Étape 7: Mise à jour des icônes
+    logger.info('Étape 7: Mise à jour des icônes')
+    icons = [
+        'apple-touch-icon.png', 'favicon-96x96.png', 'favicon-dark.png', 'favicon.ico',
+        'favicon.png', 'favicon.svg', 'logo.png', 'splash-dark.png', 'splash.png',
+        'web-app-manifest-192x192.png', 'web-app-manifest-512x512.png'
     ]
+    src_icons = root_dir / 'genx2' / 'static' / 'assets' / 'datax' / 'icons'
+    for dest in [repo_dir / 'static' / 'static', repo_dir / 'backend' / 'open_webui' / 'static']:
+        for icon in icons:
+            copy_file(src_icons / icon, dest / icon)
 
-    recursive_update(open_webui_dir, replacements=global_replacements, regex_replacements=global_regex_replacements)
-
-    # 7. Dans /root/open-webui/src/lib, remplacer "OpenWebUI" par "genX"
-    src_lib_dir = os.path.join(open_webui_dir, "src", "lib")
-    recursive_update(src_lib_dir, replacements=[("OpenWebUI", "genX")])
-
-    # 8. Copier le dossier /root/genx2/static/assets/datax dans /root/open-webui/static/assets/
-    src_datax_dir = os.path.join(root_dir, "genx2", "static", "assets", "datax")
-    dest_assets_dir = os.path.join(open_webui_dir, "static", "assets", "datax")
-    if os.path.exists(dest_assets_dir):
-        shutil.rmtree(dest_assets_dir)
-    shutil.copytree(src_datax_dir, dest_assets_dir)
-    print(f"Dossier copié: {src_datax_dir} -> {dest_assets_dir}")
-
-    # 9. Remplacer le fichier favicon.png
-    src_favicon = os.path.join(root_dir, "genx2", "static", "assets", "datax", "icons", "favicon.png")
-    dest_favicon = os.path.join(open_webui_dir, "static", "favicon.png")
-    if os.path.exists(src_favicon):
-        shutil.copy2(src_favicon, dest_favicon)
-        print(f"Favicon copié: {src_favicon} -> {dest_favicon}")
-
-    # 10. Remplacer les icônes dans /root/open-webui/static et /root/open-webui/backend/open_webui/static
-    icon_files = [
-        "apple-touch-icon.png", "favicon-96x96.png", "favicon-dark.png", "favicon.ico",
-        "favicon.png", "favicon.svg", "logo.png", "splash-dark.png", "splash.png",
-        "web-app-manifest-192x192.png", "web-app-manifest-512x512.png"
-    ]
-    src_icons_dir = os.path.join(root_dir, "genx2", "static", "assets", "datax", "icons")
-    dest_dirs = [
-        os.path.join(open_webui_dir, "static"),
-        os.path.join(open_webui_dir, "backend", "open_webui", "static")
-    ]
-    for d in dest_dirs:
-        for f_icon in icon_files:
-            src_icon_file = os.path.join(src_icons_dir, f_icon)
-            dest_icon_file = os.path.join(d, f_icon)
-            if os.path.exists(src_icon_file):
-                shutil.copy2(src_icon_file, dest_icon_file)
-                print(f"Icône '{f_icon}' mise à jour dans: {d}")
-
-    # 11. Remplacer le contenu de /root/genx2/src/lib/components/chat/Settings/About.svelte
-    src_about = os.path.join(open_webui_dir, "src", "lib", "components", "chat", "Settings", "About.svelte")
-    dest_about = os.path.join(root_dir, "genx2", "src", "lib", "components", "chat", "Settings", "About.svelte")
-    if os.path.exists(src_about):
-        shutil.copy2(src_about, dest_about)
-        print(f"Fichier About.svelte mis à jour: {src_about} -> {dest_about}")
-
-    # 12. Supprimer le bloc de redistribution dans tous les fichiers de /root/open-webui
-    redistribution_block = """Redistribution and use in source and binary forms, with or without
+    # Étape 8: Suppression du bloc de redistribution
+    logger.info('Étape 8: Suppression du bloc de redistribution')
+    redistribution_block = ("""Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
 
 1. Redistributions of source code must retain the above copyright notice, this
@@ -235,123 +307,25 @@ DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
 SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
 CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE."""
-    remove_block_in_files(open_webui_dir, redistribution_block)
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.""")
+    remove_block_in_files(repo_dir, redistribution_block)
 
-    # 13. Supprimer le bloc dans About.svelte (Settings)
-    about_block ="""
-		{#if ollamaVersion}
-			<hr class=" border-gray-100 dark:border-gray-850" />
+    # Étape 9: Copie de fichiers additionnels
+    logger.info('Étape 9: Copie de datax.txt et run_update.py')
+    copy_file(root_dir / 'genx2' / 'datax.txt', repo_dir / 'datax.txt')
+    copy_file(root_dir / 'genx2' / 'run_update.py', repo_dir / 'run_update.py')
 
-			<div>
-				<div class=" mb-2.5 text-sm font-medium">{$i18n.t('Ollama Version')}</div>
-				<div class="flex w-full">
-					<div class="flex-1 text-xs text-gray-700 dark:text-gray-200">
-						{ollamaVersion ?? 'N/A'}
-					</div>
-				</div>
-			</div>
-		{/if}
+    # Étape 10: Permissions et exécution de run.sh
+    logger.info("Étape 10: Rendre run.sh exécutable et l'exécuter")
+    run_command('chmod +x run.sh', cwd=repo_dir)
+    run_command('./run.sh', cwd=repo_dir)
 
-		<hr class=" border-gray-100 dark:border-gray-850" />
+    # Étape 11: Mise à jour du conteneur Docker
+    logger.info('Étape 11: Import de la base de données et redémarrage du conteneur')
+    run_command(f'docker stop {docker_container}')
+    run_command(f'docker cp {repo_dir}/webui.db {docker_container}:/app/backend/data/webui.db')
+    run_command(f'docker start {docker_container}')
 
-		{#if $config?.license_metadata}
-			<div class="mb-2 text-xs">
-				{#if !$WEBUI_NAME.includes('genX')}
-					<span class=" text-gray-500 dark:text-gray-300 font-medium">{$WEBUI_NAME}</span> -
-				{/if}
 
-				<span class=" capitalize">{$config?.license_metadata?.type}</span> license purchased by
-				<span class=" capitalize">{$config?.license_metadata?.organization_name}</span>
-			</div>
-		{:else}
-			<div class="flex space-x-1">
-				<a href="https://discord.gg/5rJgQTnV4s" target="_blank">
-					<img
-						alt="Discord"
-						src="https://img.shields.io/badge/Discord-Open_genX-blue?logo=discord&logoColor=white"
-					/>
-				</a>
-
-				<a href="https://twitter.com/OpengenX" target="_blank">
-					<img
-						alt="X (formerly Twitter) Follow"
-						src="https://img.shields.io/twitter/follow/OpengenX"
-					/>
-				</a>
-
-				<a href="https://iliad-datax.notion.site/GenX-e28c8f263a2b4876b3606c20051ea992" target="_blank">
-					<img
-						alt="Github Repo"
-						src="https://img.shields.io/github/stars/open-webui/open-webui?style=social&label=Star us on Github"
-					/>
-				</a>
-			</div>
-		{/if}"""
-    update_file_remove_block(
-        os.path.join(open_webui_dir, "src", "lib", "components", "chat", "Settings", "About.svelte"),
-        about_block
-    )
-
-    # 14. Supprimer le bloc dans General.svelte (Settings Admin)
-    general_block = """	
-						<div class="mt-1">
-							<div class="flex space-x-1">
-								<a href="https://discord.gg/5rJgQTnV4s" target="_blank">
-									<img
-										alt="Discord"
-										src="https://img.shields.io/badge/Discord-Open_genX-blue?logo=discord&logoColor=white"
-									/>
-								</a>
-
-								<a href="https://twitter.com/OpengenX" target="_blank">
-									<img
-										alt="X (formerly Twitter) Follow"
-										src="https://img.shields.io/twitter/follow/OpengenX"
-									/>
-								</a>
-
-								<a href="https://iliad-datax.notion.site/GenX-e28c8f263a2b4876b3606c20051ea992" target="_blank">
-									<img
-										alt="Github Repo"
-										src="https://img.shields.io/github/stars/open-webui/open-webui?style=social&label=Star us on Github"
-									/>
-								</a>
-							</div>
-						</div>"""
-    update_file_remove_block(
-        os.path.join(open_webui_dir, "src", "lib", "components", "admin", "Settings", "General.svelte"),
-        general_block
-    )
-
-    # 15. Copier le fichier datax.txt dans /root/open-webui/
-    src_datax_txt = os.path.join(root_dir, "genx2", "datax.txt")
-    dest_datax_txt = os.path.join(open_webui_dir, "datax.txt")
-    if os.path.exists(src_datax_txt):
-        shutil.copy2(src_datax_txt, dest_datax_txt)
-        print(f"datax.txt copié vers {dest_datax_txt}")
-
-    # 16. Copier le fichier run_update.py dans /root/open-webui/
-    src_run_update = os.path.join(root_dir, "genx2", "run_update.py")
-    dest_run_update = os.path.join(open_webui_dir, "run_update.py")
-    if os.path.exists(src_run_update):
-        shutil.copy2(src_run_update, dest_run_update)
-        print(f"run_update.py copié vers {dest_run_update}")
-
-    # 17. Remplacer le run.sh de /root/open-webui par celui de /root/genx2
-    src_run_sh = os.path.join(root_dir, "genx2", "run.sh")
-    dest_run_sh = os.path.join(open_webui_dir, "run.sh")
-    if os.path.exists(src_run_sh):
-        shutil.copy2(src_run_sh, dest_run_sh)
-        print(f"Fichier run.sh remplacé : {src_run_sh} -> {dest_run_sh}")
-    else:
-        print(f"Le fichier source {src_run_sh} n'existe pas, impossible de remplacer run.sh.")
-
-    # 18. Rendre run.sh exécutable
-    run_command("chmod +x run.sh", cwd=open_webui_dir)
-
-    # 19. Exécuter run.sh
-    run_command("./run.sh", cwd=open_webui_dir)
-    
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()
